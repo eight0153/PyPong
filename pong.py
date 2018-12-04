@@ -57,6 +57,9 @@ class BoundingBox:
     def bottom_right(self):
         return Point(self.origin.x + self.width, self.origin.y + self.height)
 
+    def centre(self):
+        return Point(self.origin.x + self.width / 2, self.origin.y + self.height / 2)
+
     def intersects(self, other):
         assert isinstance(other, BoundingBox)
 
