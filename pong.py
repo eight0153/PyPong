@@ -1,6 +1,5 @@
 from tkinter import *
 import random
-# TODO: Scoring
 # TODO: Document Code-
 
 
@@ -111,25 +110,14 @@ class Paddle(GameObject):
         self.canvas_object = canvas.create_rectangle(x1, y1, x2, y2, fill="black")  
         self.speed = speed
 
-    @staticmethod
-    def get_paddle(canvas, player, speed=8):
-        """Factory method for creating a player paddle."""
-        x_offset = 25
-
-        if player == Paddle.PLAYER_ONE:
-            x = x_offset
-            y = (canvas.winfo_height() - Paddle.PADDLE_HEIGHT) / 2
-            return Paddle(canvas, x, y, x + Paddle.PADDLE_WIDTH, y + Paddle.PADDLE_HEIGHT, speed)
-        else:
-            x = canvas.winfo_width() - x_offset - Paddle.PADDLE_WIDTH
-            y = (canvas.winfo_height() - Paddle.PADDLE_HEIGHT) / 2
-            return Paddle(canvas, x, y, x + Paddle.PADDLE_WIDTH, y + Paddle.PADDLE_HEIGHT, speed)
-
     def move_up(self):
         self.velocity = Point(0, -self.speed)
 
     def move_down(self):
         self.velocity = Point(0, self.speed)
+
+    def stop(self):
+        self.velocity = Point()
 
     def update(self):
         super().update()
@@ -147,6 +135,27 @@ class Paddle(GameObject):
         self.move(Point(0, dy))
 
 
+class PaddleFactory:
+    @staticmethod
+    def make_paddle(canvas, player, player_type, speed=8):
+        """Factory method for creating a player paddle."""
+        x_offset = 25
+        x = 0
+        y = 0
+
+        if player == Paddle.PLAYER_ONE:
+            x = x_offset
+            y = (canvas.winfo_height() - Paddle.PADDLE_HEIGHT) / 2
+        else:
+            x = canvas.winfo_width() - x_offset - Paddle.PADDLE_WIDTH
+            y = (canvas.winfo_height() - Paddle.PADDLE_HEIGHT) / 2
+
+        if player_type == PongGame.PlayerType.HUMAN:
+            return Paddle(canvas, x, y, x + Paddle.PADDLE_WIDTH, y + Paddle.PADDLE_HEIGHT, speed)
+        elif player_type == PongGame.PlayerType.AI_RULE_BASED:
+            return RuleBased(canvas, x, y, x + Paddle.PADDLE_WIDTH, y + Paddle.PADDLE_HEIGHT, speed)
+
+
 class Ball(GameObject):
     BALL_SIZE = 12
 
@@ -161,7 +170,7 @@ class Ball(GameObject):
         initial_velocity = speed * Point(x_dir, y_dir)
 
         super().__init__(canvas, x1, y1, x2, y2, velocity=initial_velocity)
-        
+
         self.canvas_object = canvas.create_oval(x1, y1, x2, y2, fill="red")
 
     @staticmethod
@@ -169,7 +178,7 @@ class Ball(GameObject):
         """Get a ball placed at the centre of the game window."""
         x = canvas.winfo_width() / 2 - Ball.BALL_SIZE / 2
         y = canvas.winfo_height() / 2 - Ball.BALL_SIZE / 2
-        
+
         return Ball(canvas, x, y, x + Ball.BALL_SIZE, y + Ball.BALL_SIZE, speed=speed)
 
     def update(self):
@@ -182,6 +191,32 @@ class Ball(GameObject):
             self.velocity.y *= -1
 
 
+class AIAgent(Paddle):
+    def update(self, game_state):
+        """the AI chooses a move and then the player update happens as usual.
+
+        Arguments:
+            game_state: A dictionary containing the 'game state', e.g. objects that the AI may find useful.
+        """
+        self.get_move(game_state)()
+        super().update()
+
+    def get_move(self, game_state):
+        return None
+
+
+class RuleBased(AIAgent):
+    def get_move(self, game_state):
+        ball_centre_y = game_state['ball'].bounding_box.centre().y
+
+        if ball_centre_y < self.bounding_box.top_left().y:
+            return self.move_up
+        elif ball_centre_y > self.bounding_box.bottom_left().y:
+            return self.move_down
+        else:
+            return self.stop
+
+
 class PongGame:
     """A game of Pong.
 
@@ -190,7 +225,12 @@ class PongGame:
 
     Call run() to start the game.
     """
-    def __init__(self, spin=0.2, hit_speedup=1.05, ball_max_speed=10, window_width=800, window_height=400):
+    class PlayerType:
+        HUMAN = 1
+        AI_RULE_BASED = 2
+
+    def __init__(self, spin=0.2, hit_speedup=1.05, ball_max_speed=10, window_width=800, window_height=400,
+                 p1_type=PlayerType.HUMAN, p2_type=PlayerType.AI_RULE_BASED):
         """Set up a game of Pong.
 
         Arguments:
@@ -219,7 +259,9 @@ class PongGame:
 
         # paddles and ball setup later in reset()
         self.pad1 = None
+        self.pad1_type = p1_type
         self.pad2 = None
+        self.pad2_type = p2_type
         self.ball = None
 
         self.spin = spin
@@ -247,8 +289,8 @@ class PongGame:
         if self.pad2 is not None:            
             self.canvas.delete(self.pad2.canvas_object)
 
-        self.pad1 = Paddle.get_paddle(self.canvas, Paddle.PLAYER_ONE)
-        self.pad2 = Paddle.get_paddle(self.canvas, Paddle.PLAYER_TWO)
+        self.pad1 = PaddleFactory.make_paddle(self.canvas, Paddle.PLAYER_ONE, self.pad1_type)
+        self.pad2 = PaddleFactory.make_paddle(self.canvas, Paddle.PLAYER_TWO, self.pad2_type)
 
         self.pause()
 
@@ -343,8 +385,13 @@ class PongGame:
 
     def update(self):
         self.ball.update()
-        self.pad1.update()
-        self.pad2.update()
+
+        for player in [self.pad1, self.pad2]:
+            if isinstance(player, AIAgent):
+                player.update({'ball': self.ball})
+            else:
+                player.update()
+
         self.physics()
 
         self.canvas.itemconfig(self.p1_score_display, text=str(self.p1_score))
