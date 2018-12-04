@@ -135,9 +135,57 @@ class Paddle(GameObject):
         self.move(Point(0, dy))
 
 
+class AIAgent(Paddle):
+    class Difficulty:
+        EASY = 1
+        MEDIUM = 2
+        HARD = 3
+        IMPOSSIBLE = 4
+
+    def update(self, game_state):
+        """the AI chooses a move and then the player update happens as usual.
+
+        Arguments:
+            game_state: A dictionary containing the 'game state', e.g. objects that the AI may find useful.
+        """
+        move: function = self.get_move(game_state)
+        move()
+        super().update()
+
+    def get_move(self, game_state):
+        return None
+
+
+class RuleBased(AIAgent):
+    def __init__(self, canvas, x1, y1, x2, y2, difficulty=AIAgent.Difficulty.MEDIUM):
+        if difficulty == self.Difficulty.EASY:
+            self.max_speed = 4
+        elif difficulty == self.Difficulty.MEDIUM:
+            self.max_speed = 6
+        elif difficulty == self.Difficulty.HARD:
+            self.max_speed = 8
+        elif difficulty == self.Difficulty.IMPOSSIBLE:
+            self.max_speed = 10
+
+        super().__init__(canvas, x1, y1, x2, y2, self.max_speed)
+
+    def get_move(self, game_state):
+        ball_centre_y = game_state['ball'].bounding_box.centre().y
+        dy = abs(ball_centre_y - self.bounding_box.centre().y)
+
+        self.speed = min(self.max_speed, dy)
+
+        if ball_centre_y < self.bounding_box.centre().y:
+            return self.move_up
+        elif ball_centre_y > self.bounding_box.centre().y:
+            return self.move_down
+        else:
+            return self.stop
+
+
 class PaddleFactory:
     @staticmethod
-    def make_paddle(canvas, player, player_type, speed=8):
+    def make_paddle(canvas, player, player_type, speed=8, ai_difficulty=AIAgent.Difficulty.MEDIUM):
         """Factory method for creating a player paddle."""
         x_offset = 25
         x = 0
@@ -153,7 +201,7 @@ class PaddleFactory:
         if player_type == PongGame.PlayerType.HUMAN:
             return Paddle(canvas, x, y, x + Paddle.PADDLE_WIDTH, y + Paddle.PADDLE_HEIGHT, speed)
         elif player_type == PongGame.PlayerType.AI_RULE_BASED:
-            return RuleBased(canvas, x, y, x + Paddle.PADDLE_WIDTH, y + Paddle.PADDLE_HEIGHT, speed)
+            return RuleBased(canvas, x, y, x + Paddle.PADDLE_WIDTH, y + Paddle.PADDLE_HEIGHT, ai_difficulty)
 
 
 class Ball(GameObject):
@@ -191,32 +239,6 @@ class Ball(GameObject):
             self.velocity.y *= -1
 
 
-class AIAgent(Paddle):
-    def update(self, game_state):
-        """the AI chooses a move and then the player update happens as usual.
-
-        Arguments:
-            game_state: A dictionary containing the 'game state', e.g. objects that the AI may find useful.
-        """
-        self.get_move(game_state)()
-        super().update()
-
-    def get_move(self, game_state):
-        return None
-
-
-class RuleBased(AIAgent):
-    def get_move(self, game_state):
-        ball_centre_y = game_state['ball'].bounding_box.centre().y
-
-        if ball_centre_y < self.bounding_box.top_left().y:
-            return self.move_up
-        elif ball_centre_y > self.bounding_box.bottom_left().y:
-            return self.move_down
-        else:
-            return self.stop
-
-
 class PongGame:
     """A game of Pong.
 
@@ -230,7 +252,8 @@ class PongGame:
         AI_RULE_BASED = 2
 
     def __init__(self, spin=0.2, hit_speedup=1.05, ball_max_speed=10, window_width=800, window_height=400,
-                 p1_type=PlayerType.HUMAN, p2_type=PlayerType.AI_RULE_BASED):
+                 p1_type=PlayerType.HUMAN, p2_type=PlayerType.AI_RULE_BASED,
+                 ai_difficulty=AIAgent.Difficulty.MEDIUM):
         """Set up a game of Pong.
 
         Arguments:
@@ -263,6 +286,7 @@ class PongGame:
         self.pad2 = None
         self.pad2_type = p2_type
         self.ball = None
+        self.ai_difficulty = ai_difficulty
 
         self.spin = spin
         self.ball_max_speed = ball_max_speed
@@ -289,8 +313,10 @@ class PongGame:
         if self.pad2 is not None:            
             self.canvas.delete(self.pad2.canvas_object)
 
-        self.pad1 = PaddleFactory.make_paddle(self.canvas, Paddle.PLAYER_ONE, self.pad1_type)
-        self.pad2 = PaddleFactory.make_paddle(self.canvas, Paddle.PLAYER_TWO, self.pad2_type)
+        self.pad1 = PaddleFactory.make_paddle(self.canvas, Paddle.PLAYER_ONE, self.pad1_type,
+                                              ai_difficulty=self.ai_difficulty)
+        self.pad2 = PaddleFactory.make_paddle(self.canvas, Paddle.PLAYER_TWO, self.pad2_type,
+                                              ai_difficulty=self.ai_difficulty)
 
         self.pause()
 
@@ -401,4 +427,3 @@ class PongGame:
 if __name__ == "__main__":
     game = PongGame()
     game.run()
-
