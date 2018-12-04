@@ -105,7 +105,9 @@ class Paddle(GameObject):
     PADDLE_WIDTH = 10
     PADDLE_HEIGHT = 40
 
-    def __init__(self, canvas, x1, y1, x2, y2, speed=8):
+    DEFAULT_SPEED = 8
+
+    def __init__(self, canvas, x1, y1, x2, y2, speed=DEFAULT_SPEED):
         super().__init__(canvas, x1, y1, x2, y2)
         self.canvas_object = canvas.create_rectangle(x1, y1, x2, y2, fill="black")  
         self.speed = speed
@@ -142,6 +144,12 @@ class AIAgent(Paddle):
         HARD = 3
         IMPOSSIBLE = 4
 
+    def __init__(self, canvas, x1, y1, x2, y2, difficulty=Difficulty.MEDIUM, speed=Paddle.DEFAULT_SPEED):
+        super().__init__(canvas, x1, y1, x2, y2, speed)
+
+        self.difficulty = difficulty
+        self.max_speed = speed
+
     def update(self, game_state):
         """the AI chooses a move and then the player update happens as usual.
 
@@ -156,12 +164,36 @@ class AIAgent(Paddle):
         return None
 
 
+class Random(AIAgent):
+    def __init__(self, canvas, x1, y1, x2, y2, difficulty=AIAgent.Difficulty.MEDIUM):
+        super().__init__(canvas, x1, y1, x2, y2, difficulty)
+
+        if difficulty == self.Difficulty.EASY:
+            self.max_speed = 12
+        elif difficulty == self.Difficulty.MEDIUM:
+            self.max_speed = 18
+        elif difficulty == self.Difficulty.HARD:
+            self.max_speed = 24
+        elif difficulty == self.Difficulty.IMPOSSIBLE:
+            self.max_speed = 30
+
+    def get_move(self, game_state):
+        move = random.choice([self.move_up, self.move_down, self.stop])
+        dy = random.gauss(0, self.max_speed / 3)
+
+        self.speed = min(abs(dy), self.max_speed)
+
+        return move
+
+
 class RuleBased(AIAgent):
     """A rule-based AI that simply tracks the ball.
 
     Changing the difficulty changes the agent's ability to track the ball at high speeds.
     """
     def __init__(self, canvas, x1, y1, x2, y2, difficulty=AIAgent.Difficulty.MEDIUM):
+        super().__init__(canvas, x1, y1, x2, y2, difficulty)
+
         if difficulty == self.Difficulty.EASY:
             self.max_speed = 4
         elif difficulty == self.Difficulty.MEDIUM:
@@ -170,8 +202,6 @@ class RuleBased(AIAgent):
             self.max_speed = 8
         elif difficulty == self.Difficulty.IMPOSSIBLE:
             self.max_speed = 10
-
-        super().__init__(canvas, x1, y1, x2, y2, self.max_speed)
 
     def get_move(self, game_state):
         ball_centre_y = game_state['ball'].bounding_box.centre().y
@@ -242,6 +272,8 @@ class PaddleFactory:
 
         if player_type == PongGame.PlayerType.HUMAN:
             return Paddle(canvas, x, y, x + Paddle.PADDLE_WIDTH, y + Paddle.PADDLE_HEIGHT, speed)
+        elif player_type == PongGame.PlayerType.AI_RANDOM:
+            return Random(canvas, x, y, x + Paddle.PADDLE_WIDTH, y + Paddle.PADDLE_HEIGHT)
         elif player_type == PongGame.PlayerType.AI_RULE_BASED:
             return RuleBased(canvas, x, y, x + Paddle.PADDLE_WIDTH, y + Paddle.PADDLE_HEIGHT, ai_difficulty)
         elif player_type == PongGame.PlayerType.AI_DEAD_ZONE:
@@ -293,8 +325,9 @@ class PongGame:
     """
     class PlayerType:
         HUMAN = 1
-        AI_RULE_BASED = 2
-        AI_DEAD_ZONE = 3
+        AI_RANDOM = 2
+        AI_RULE_BASED = 3
+        AI_DEAD_ZONE = 4
 
     def __init__(self, spin=0.2, hit_speedup=1.05, ball_max_speed=10, window_width=800, window_height=400,
                  p1_type=PlayerType.HUMAN, p2_type=PlayerType.HUMAN,
