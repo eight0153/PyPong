@@ -256,8 +256,7 @@ class DeadZone(RuleBased):
 
 class PaddleFactory:
     @staticmethod
-    def make_paddle(canvas, player, player_type, speed=8, ai_difficulty=AIAgent.Difficulty.MEDIUM,
-                    ai_dead_zone=0):
+    def make_paddle(canvas, player, player_type, speed=Paddle.DEFAULT_SPEED, ai_difficulty=AIAgent.Difficulty.MEDIUM):
         """Factory method for creating a player paddle."""
         x_offset = 25
         x = 0
