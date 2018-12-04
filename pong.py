@@ -157,6 +157,10 @@ class AIAgent(Paddle):
 
 
 class RuleBased(AIAgent):
+    """A rule-based AI that simply tracks the ball.
+
+    Changing the difficulty changes the agent's ability to track the ball at high speeds.
+    """
     def __init__(self, canvas, x1, y1, x2, y2, difficulty=AIAgent.Difficulty.MEDIUM):
         if difficulty == self.Difficulty.EASY:
             self.max_speed = 4
@@ -173,7 +177,7 @@ class RuleBased(AIAgent):
         ball_centre_y = game_state['ball'].bounding_box.centre().y
         dy = abs(ball_centre_y - self.bounding_box.centre().y)
 
-        self.speed = min(self.max_speed, dy)
+        self.speed = min(dy, self.max_speed)
 
         if ball_centre_y < self.bounding_box.centre().y:
             return self.move_up
@@ -183,9 +187,47 @@ class RuleBased(AIAgent):
             return self.stop
 
 
+class DeadZone(RuleBased):
+    """A rule-based AI that has a 'dead zone' for which the agent does not track the ball.
+
+    When the agent is not tracking the ball, it tries to return its 'resting position' at the centre of the
+    screen height.
+    """
+    def __init__(self, canvas, x1, y1, x2, y2, difficulty=AIAgent.Difficulty.MEDIUM):
+        super().__init__(canvas, x1, y1, x2, y2, difficulty)
+
+        if difficulty == AIAgent.Difficulty.EASY:
+            self.dead_zone_size = canvas.winfo_width() * 0.8
+        elif difficulty == self.Difficulty.MEDIUM:
+            self.dead_zone_size = canvas.winfo_width() * 0.5
+        elif difficulty == self.Difficulty.HARD:
+            self.dead_zone_size = canvas.winfo_width() * 0.2
+        elif difficulty == self.Difficulty.IMPOSSIBLE:
+            self.dead_zone_size = 0
+
+    def get_move(self, game_state):
+        move = super().get_move(game_state)
+
+        if abs(game_state['ball'].bounding_box.centre().x - self.bounding_box.centre().x) > self.dead_zone_size:
+            centre_y = self.canvas.winfo_height() / 2 - self.bounding_box.height / 2
+            dy = centre_y - self.bounding_box.centre().y
+
+            self.speed = min(abs(dy), self.max_speed)
+
+            if dy < 0:
+                return self.move_up
+            elif dy > 0:
+                return self.move_down
+            else:
+                return self.stop
+
+        return move
+
+
 class PaddleFactory:
     @staticmethod
-    def make_paddle(canvas, player, player_type, speed=8, ai_difficulty=AIAgent.Difficulty.MEDIUM):
+    def make_paddle(canvas, player, player_type, speed=8, ai_difficulty=AIAgent.Difficulty.MEDIUM,
+                    ai_dead_zone=0):
         """Factory method for creating a player paddle."""
         x_offset = 25
         x = 0
@@ -202,6 +244,8 @@ class PaddleFactory:
             return Paddle(canvas, x, y, x + Paddle.PADDLE_WIDTH, y + Paddle.PADDLE_HEIGHT, speed)
         elif player_type == PongGame.PlayerType.AI_RULE_BASED:
             return RuleBased(canvas, x, y, x + Paddle.PADDLE_WIDTH, y + Paddle.PADDLE_HEIGHT, ai_difficulty)
+        elif player_type == PongGame.PlayerType.AI_DEAD_ZONE:
+            return DeadZone(canvas, x, y, x + Paddle.PADDLE_WIDTH, y + Paddle.PADDLE_HEIGHT, ai_difficulty)
 
 
 class Ball(GameObject):
@@ -250,9 +294,10 @@ class PongGame:
     class PlayerType:
         HUMAN = 1
         AI_RULE_BASED = 2
+        AI_DEAD_ZONE = 3
 
     def __init__(self, spin=0.2, hit_speedup=1.05, ball_max_speed=10, window_width=800, window_height=400,
-                 p1_type=PlayerType.HUMAN, p2_type=PlayerType.AI_RULE_BASED,
+                 p1_type=PlayerType.HUMAN, p2_type=PlayerType.HUMAN,
                  ai_difficulty=AIAgent.Difficulty.MEDIUM):
         """Set up a game of Pong.
 
@@ -425,5 +470,5 @@ class PongGame:
 
 
 if __name__ == "__main__":
-    game = PongGame()
+    game = PongGame(p2_type=PongGame.PlayerType.AI_DEAD_ZONE)
     game.run()
