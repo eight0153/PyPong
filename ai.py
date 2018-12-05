@@ -1,7 +1,7 @@
 from typing import Callable
 
 
-class AIAgent():
+class AIAgent:
     class Difficulty:
         EASY = 1
         MEDIUM = 2
@@ -16,7 +16,7 @@ class AIAgent():
     def noop():
         pass
 
-    def get_move(self, game_state) -> Callable:
+    def get_action(self, game_state) -> Callable:
         return self.noop
 
 
@@ -37,7 +37,7 @@ class RuleBased(AIAgent):
         elif difficulty == self.Difficulty.IMPOSSIBLE:
             self.dead_zone_size = 0
 
-    def get_move(self, game_state):
+    def get_action(self, game_state):
         paddle = game_state['paddle']
         ball = game_state['ball']
 

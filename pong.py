@@ -26,13 +26,13 @@ class Point:
     def __add__(self, other):
         if isinstance(other, Point):
             return Point(self.x + other.x, self.y + other.y)
-        else: # other is a scalar
+        else:  # other is a scalar
             return Point(self.x + other, self.y + other)
 
     def __sub__(self, other):
         if isinstance(other, Point):
             return Point(self.x - other.x, self.y - other.y)
-        else: # other is a scalar
+        else:  # other is a scalar
             return Point(self.x - other, self.y - other)
 
     def __mul__(self, other):
@@ -59,15 +59,16 @@ class Point:
         return self.x == other.x and self.y == other.y
 
 
-class BoundingBox:
-    def __init__(self, origin: Point, width, height):
-        self.origin = origin
+class GameObject:
+    def __init__(self, position, width, height, velocity=Point(0, 0)):
+        self.position = position
         self.width = width
         self.height = height
+        self.velocity = velocity
 
     @property
     def left(self):
-        return self.origin.x
+        return self.position.x
 
     @property
     def right(self):
@@ -75,18 +76,29 @@ class BoundingBox:
 
     @property
     def top(self):
-        return self.origin.y
+        return self.position.y
 
     @property
     def bottom(self):
         return self.top + self.height
 
     @property
-    def centre(self) -> Point:
-        return Point(self.origin.x + self.width / 2, self.origin.y + self.height / 2)
+    def centre(self):
+        return Point((self.left + self.right) / 2, (self.top + self.bottom) / 2)
 
-    def intersects(self, other) -> bool:
-        assert isinstance(other, BoundingBox)
+    def update(self, canvas):
+        self.move(self.velocity)
+
+    def draw(self, canvas):
+        pass
+
+    def move(self, delta_pos: Point):
+        """Move the object by moving its origin to 'origin + delta_pos'"""
+        self.position += delta_pos
+
+    def intersects(self, other):
+        """Check if one game object intersects another via their bounding boxes."""
+        assert isinstance(other, GameObject)
 
         x_overlaps = self.right > other.left and other.right > self.left
         y_overlaps = self.bottom > other.top and other.bottom > self.top
@@ -94,85 +106,13 @@ class BoundingBox:
         return x_overlaps and y_overlaps
 
 
-class GameObject:
-    def __init__(self, canvas, x1, y1, x2, y2, velocity=Point(0, 0)):
-        self.canvas = canvas
-        self.canvas_object = None
-        self.bounding_box = BoundingBox(Point(x1, y1), x2 - x1, y2 - y1)
-        self.velocity = velocity
-
-    @property
-    def position(self):
-        return self.canvas.coords(self.canvas_object)        
-
-    @property
-    def left(self):
-        x1, _, _, _ = self.position
-
-        return x1
-
-    @property
-    def right(self):
-        _, _, x2, _ = self.position
-        
-        return x2
-
-    @property
-    def top(self):
-        _, y1, _, _ = self.position
-        
-        return y1
-
-    @property
-    def bottom(self):
-        _, _, _, y2 = self.position
-        
-        return y2
-
-    @property
-    def centre(self):
-        x1, y1, x2, y2 = self.position
-
-        return Point((x1 + x2) / 2, (y1 + y2) / 2)
-
-    @property
-    def width(self):
-        x1, _, x2, _ = self.position
-
-        return x2 - x1
-
-    @property
-    def height(self):
-        _, y1, _, y2 = self.position
-
-        return y2 - y1
-
-    def update(self):
-        self.move(self.velocity)
-
-    def move(self, delta_pos: Point):
-        """Move the object by moving its origin to 'origin + delta_pos'"""
-        self.bounding_box.origin += delta_pos
-        self.canvas.move(self.canvas_object, delta_pos.x, delta_pos.y)
-
-    def intersects(self, other):
-        """Check if one game object intersects another via their bounding boxes."""
-        assert isinstance(other, GameObject)
-
-        return self.bounding_box.intersects(other.bounding_box)
-
-    def is_out_of_bounds(self):
-        return self.left < 0 or self.right > self.canvas.winfo_width() or\
-            self.top < 0 or self.bottom > self.canvas.winfo_height()
-
-
 class Ball(GameObject):
     BALL_SIZE = 12
 
     DEFAULT_SPEED = 3
-    DEFAULT_MAX_SPEED=10
+    DEFAULT_MAX_SPEED = 10
 
-    def __init__(self, canvas, x1, y1, x2, y2, speed=DEFAULT_SPEED, max_speed=DEFAULT_MAX_SPEED):
+    def __init__(self, position, width, height, speed=DEFAULT_SPEED, max_speed=DEFAULT_MAX_SPEED):
         """Create a ball at the specified location.
 
         The ball starts moving in a random direction.
@@ -181,9 +121,8 @@ class Ball(GameObject):
         y_dir = -1 if random.gauss(0, 1) < 0 else 1
         initial_velocity = speed * Point(x_dir, y_dir)
 
-        super().__init__(canvas, x1, y1, x2, y2, velocity=initial_velocity)
+        super().__init__(position, width, height, velocity=initial_velocity)
 
-        self.canvas_object = canvas.create_oval(x1, y1, x2, y2, fill="red")
         self.max_speed = max_speed
 
     @staticmethod
@@ -192,24 +131,25 @@ class Ball(GameObject):
         x = canvas.winfo_width() / 2 - Ball.BALL_SIZE / 2
         y = canvas.winfo_height() / 2 - Ball.BALL_SIZE / 2
 
-        return Ball(canvas, x, y, x + Ball.BALL_SIZE, y + Ball.BALL_SIZE, speed=speed)
+        return Ball(Point(x, y), Ball.BALL_SIZE, Ball.BALL_SIZE, speed=speed, max_speed=max_speed)
 
-    def update(self):
-        super().update()
+    def update(self, canvas):
+        super().update(canvas)
 
         # Check if ball past upper or lower screen bounds.
-        if self.top <= 0 or self.bottom >= self.canvas.winfo_height():
+        if self.top < 0 or self.bottom > canvas.winfo_height():
             self.velocity.y *= -1
 
-            if self.top <= 0:
-                dy = -self.top
+            if self.top < 0:
+                self.position.y = 0
             else:
-                dy = self.canvas.winfo_height() - self.bottom
-
-            self.move(Point(0, dy))
+                self.position.y = canvas.winfo_height() - self.height
 
         if self.velocity.magnitude > self.max_speed:
             self.velocity = self.max_speed * self.velocity.unit_vector
+
+    def draw(self, canvas):
+        canvas.create_oval(self.left, self.top, self.right, self.bottom, fill="red")
 
 
 class Paddle(GameObject):
@@ -221,17 +161,14 @@ class Paddle(GameObject):
 
     DEFAULT_SPEED = 8
 
-    def __init__(self, canvas, x1, y1, x2, y2, speed=DEFAULT_SPEED):
-        super().__init__(canvas, x1, y1, x2, y2)
-        self.canvas_object = canvas.create_rectangle(x1, y1, x2, y2, fill="black")  
+    def __init__(self, position, width, height, speed=DEFAULT_SPEED):
+        super().__init__(position, width, height)
         self.speed = speed
 
     @staticmethod
     def make_paddle(canvas, player, speed=DEFAULT_SPEED):
         """Factory method for creating a player paddle."""
         x_offset = 25
-        x = 0
-        y = 0
 
         if player == Paddle.PLAYER_ONE:
             x = x_offset
@@ -240,7 +177,7 @@ class Paddle(GameObject):
             x = canvas.winfo_width() - x_offset - Paddle.PADDLE_WIDTH
             y = (canvas.winfo_height() - Paddle.PADDLE_HEIGHT) / 2
 
-        return Paddle(canvas, x, y, x + Paddle.PADDLE_WIDTH, y + Paddle.PADDLE_HEIGHT, speed)
+        return Paddle(Point(x, y), Paddle.PADDLE_WIDTH, Paddle.PADDLE_HEIGHT, speed)
 
     def move_up(self):
         self.velocity = Point(0, -self.speed)
@@ -251,20 +188,16 @@ class Paddle(GameObject):
     def stop(self):
         self.velocity = Point()
 
-    def update(self):
-        super().update()
-
-        _, y1, _, y2 = self.position
-
+    def update(self, canvas):
+        super().update(canvas)
         # keep paddle on screen
-        dy = 0
+        if self.top < 0:
+            self.position.y = 0
+        elif self.bottom > canvas.winfo_height():
+            self.position.y = canvas.winfo_height() - self.height
 
-        if y1 < 0:
-            dy = -y1
-        elif y2 > self.canvas.winfo_height():
-            dy = self.canvas.winfo_height() - y2
-
-        self.move(Point(0, dy))
+    def draw(self, canvas):
+        canvas.create_rectangle(self.left, self.top, self.right, self.bottom, fill="black")
 
 
 class PongGame:
@@ -275,9 +208,11 @@ class PongGame:
 
     Call run() to start the game.
     """
+    FRAME_RATE = 60
+    FRAME_DELAY = 1000 // 60
 
-    def __init__(self, spin=0.2, hit_speedup=1.05, ball_max_speed=Ball.DEFAULT_MAX_SPEED, window_width=800, window_height=400,
-                 p1_ai_type=None, p2_ai_type=None, ai_difficulty=AIAgent.Difficulty.MEDIUM):
+    def __init__(self, spin=0.2, hit_speedup=1.05, ball_max_speed=Ball.DEFAULT_MAX_SPEED, window_width=800,
+                 window_height=400, p1_ai_type=None, p2_ai_type=None, ai_difficulty=AIAgent.Difficulty.MEDIUM):
         """Set up a game of Pong.
 
         Arguments:
@@ -309,54 +244,29 @@ class PongGame:
         self.pad2 = None
         self.ball = None
         self.ai_difficulty = ai_difficulty
-        self.ai_players = [None, None]
-
-        self.ai_players[0] = AIFactory.make_ai(canvas, p1_ai_type, ai_difficulty)
-        self.ai_players[1] = AIFactory.make_ai(canvas, p2_ai_type, ai_difficulty)
+        self.ai_players = [AIFactory.make_ai(canvas, p1_ai_type, ai_difficulty),
+                           AIFactory.make_ai(canvas, p2_ai_type, ai_difficulty)]
 
         self.spin = spin
         self.ball_max_speed = ball_max_speed
         self.hit_speedup = hit_speedup
         
         self.p1_score = 0
-        self.p1_score_display = self.canvas.create_text(10, 10, text=str(self.p1_score))
-        self.p2_score = 0        
-        self.p2_score_display = self.canvas.create_text(window_width - 10, 10, text=str(self.p2_score))
+        self.p2_score = 0
 
         self.paused = False
-        self.pause_text = self.canvas.create_text(window_width / 2, window_height / 2 - 20, text="Press Space to Start")
         self.reset()
 
     def reset(self):
         """Reset the game by placing the ball back in the center and the paddles in their starting positions."""
-        if self.ball is not None:
-            self.canvas.delete(self.ball.canvas_object)
-
         self.ball = Ball.get_centred_ball(self.canvas, max_speed=self.ball_max_speed)
-
-        if self.pad1 is not None:
-            self.canvas.delete(self.pad1.canvas_object)
-        if self.pad2 is not None:            
-            self.canvas.delete(self.pad2.canvas_object)
-
         self.pad1 = Paddle.make_paddle(self.canvas, Paddle.PLAYER_ONE)
         self.pad2 = Paddle.make_paddle(self.canvas, Paddle.PLAYER_TWO)
 
-        self.pause()
+        self.paused = True
 
     def toggle_pause(self):
-        if self.paused:
-            self.unpause()
-        else:
-            self.pause()
-
-    def pause(self):
-        self.paused = True
-        self.canvas.itemconfig(self.pause_text, text="Press Space to Start")
-
-    def unpause(self):
-        self.paused = False
-        self.canvas.itemconfig(self.pause_text, text="")
+        self.paused = not self.paused
 
     def handle_key_pressed(self, event):
         key = event.keysym.lower()
@@ -392,28 +302,26 @@ class PongGame:
     def mainloop(self):
         if not self.paused:
             self.update()
+            self.physics_update()
 
-        self.canvas.after(16, self.mainloop)
+        self.draw()
+        self.canvas.after(self.FRAME_DELAY, self.mainloop)
 
     def update(self):
         if self.ai_players[0] is not None:
-            move = self.ai_players[0].get_move({'ball': self.ball, 'paddle': self.pad1})
-            move()
+            action = self.ai_players[0].get_action({'ball': self.ball, 'paddle': self.pad1})
+            action()
 
         if self.ai_players[1] is not None:
-            move = self.ai_players[1].get_move({'ball': self.ball, 'paddle': self.pad2})
-            move()
+            action = self.ai_players[1].get_action({'ball': self.ball, 'paddle': self.pad2})
+            action()
 
         for paddle in [self.pad1, self.pad2]:            
-                paddle.update()
+                paddle.update(self.canvas)
 
-        self.ball.update()
-        self.physics()
+        self.ball.update(self.canvas)
 
-        self.canvas.itemconfig(self.p1_score_display, text=str(self.p1_score))
-        self.canvas.itemconfig(self.p2_score_display, text=str(self.p2_score))
-
-    def physics(self):
+    def physics_update(self):
         if self.ball.intersects(self.pad1):
             self.ball.velocity.x *= -1 * self.hit_speedup
             self.ball.velocity.y += self.spin * self.pad1.velocity.y
@@ -436,13 +344,32 @@ class PongGame:
 
             self.ball.move(Point(dx, 0))
 
-        if self.ball.is_out_of_bounds():
+        if self.is_out_of_bounds(self.ball):
             if self.ball.left < 0:
                 self.p2_score += 1
                 self.reset()
             elif self.ball.right > self.canvas.winfo_width():
                 self.p1_score += 1
                 self.reset()
+
+    def is_out_of_bounds(self, game_object):
+        return game_object.left < 0 or game_object.right > self.canvas.winfo_width() or \
+               game_object.top < 0 or game_object.bottom > self.canvas.winfo_height()
+
+    def draw(self):
+        self.canvas.delete("all")
+
+        self.draw_gui()
+        self.pad1.draw(self.canvas)
+        self.pad2.draw(self.canvas)
+        self.ball.draw(self.canvas)
+
+    def draw_gui(self):
+        if self.paused:
+            self.canvas.create_text(self.canvas.winfo_width() / 2, self.canvas.winfo_height() / 2 - 20,
+                                    text="Press Space to Start")
+        self.canvas.create_text(10, 10, text=str(self.p1_score))
+        self.canvas.create_text(self.canvas.winfo_width() - 10, 10, text=str(self.p2_score))
 
 
 if __name__ == "__main__":
