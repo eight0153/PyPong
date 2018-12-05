@@ -1,5 +1,3 @@
-from __future__ import annotations
-from typing import Callable
 from tkinter import *
 from math import sqrt
 import random
@@ -157,7 +155,7 @@ class GameObject:
         self.bounding_box.origin += delta_pos
         self.canvas.move(self.canvas_object, delta_pos.x, delta_pos.y)
 
-    def intersects(self, other: GameObject):
+    def intersects(self, other):
         """Check if one game object intersects another via their bounding boxes."""
         assert isinstance(other, GameObject)
 
@@ -448,5 +446,5 @@ class PongGame:
 
 
 if __name__ == "__main__":
-    game = PongGame(p2_ai_type=AIType.DEAD_ZONE)
+    game = PongGame(p2_ai_type=AIType.RULE_BASED)
     game.run()
