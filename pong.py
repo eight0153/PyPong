@@ -87,14 +87,10 @@ class GameObject:
         return Point((self.left + self.right) / 2, (self.top + self.bottom) / 2)
 
     def update(self, canvas):
-        self.move(self.velocity)
+        self.position += self.velocity
 
     def draw(self, canvas):
         pass
-
-    def move(self, delta_pos: Point):
-        """Move the object by moving its origin to 'origin + delta_pos'"""
-        self.position += delta_pos
 
     def intersects(self, other):
         """Check if one game object intersects another via their bounding boxes."""
@@ -308,16 +304,12 @@ class PongGame:
         self.canvas.after(self.FRAME_DELAY, self.mainloop)
 
     def update(self):
-        if self.ai_players[0] is not None:
-            action = self.ai_players[0].get_action({'ball': self.ball, 'paddle': self.pad1})
-            action()
-
-        if self.ai_players[1] is not None:
-            action = self.ai_players[1].get_action({'ball': self.ball, 'paddle': self.pad2})
+        for ai_player, paddle in zip(self.ai_players, [self.pad1, self.pad2]):
+            action = ai_player.get_action({'canvas': self.canvas, 'ball': self.ball, 'paddle': paddle})
             action()
 
         for paddle in [self.pad1, self.pad2]:            
-                paddle.update(self.canvas)
+            paddle.update(self.canvas)
 
         self.ball.update(self.canvas)
 
@@ -325,24 +317,12 @@ class PongGame:
         if self.ball.intersects(self.pad1):
             self.ball.velocity.x *= -1 * self.hit_speedup
             self.ball.velocity.y += self.spin * self.pad1.velocity.y
-
-            # put ball on the rhs of the paddle
-            pad1_x = self.pad1.right
-            ball_x = self.ball.left
-            dx = pad1_x - ball_x
-
-            self.ball.move(Point(dx, 0))
+            self.ball.position.x = self.pad1.right
 
         elif self.ball.intersects(self.pad2):
             self.ball.velocity.x *= -1 * self.hit_speedup
             self.ball.velocity.y += self.spin * self.pad2.velocity.y
-
-            # put ball on the lhs of the paddle
-            pad2_x = self.pad2.left
-            ball_x = self.ball.right
-            dx = pad2_x - ball_x
-
-            self.ball.move(Point(dx, 0))
+            self.ball.position.x = self.pad2.left - self.ball.width
 
         if self.is_out_of_bounds(self.ball):
             if self.ball.left < 0:
